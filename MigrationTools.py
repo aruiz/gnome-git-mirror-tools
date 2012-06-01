@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 """
 Copyright (c) 2012 Alberto Ruiz <aruiz@gnome.org>
 All rights reserved.
@@ -27,23 +28,61 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
-# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-from BeautifulSoup import BeautifulSoup
+import json
 import urllib2
+import commands
+import os
+import os.path
 
-def get_all_repositories ():
-    def find_repos (tag):
-        return tag.has_key('class') and tag['class'] == "sublevel-repo"
+ORGANIZATION="GNOME-Project"
+SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
 
-    soup = BeautifulSoup(urllib2.urlopen ('http://git.gnome.org/browse/'))
+def create_github_reop ():
 
-    repos = []
 
-    for r in soup.findAll(find_repos):
-    a = r.find('a')
-    if a['title'].startswith('archive/'):
-        continue
-    repos.append("git://git.gnome.org/" + a['title'])
+def list_repositories ():
+    return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
 
-    return repos
+def pull_all_branches (url):
+    cwd = os.getcwd()
+    os.chdir(url.split('/')[-1])
+    status, output = commands.getstatusoutput('git pull --all')
+    os.chdir(cwd)
+
+    if status != 0:
+        raise Exception("There was an error pulling from origin in %s: %s" % (url, output))
+
+def push_all_branches (url):
+    cwd = os.getcwd()
+    os.chdir(url.split('/')[-1])
+    status, output = commands.getstatusoutput('git push --all github')
+    os.chdir(cwd)
+
+    if status != 0:
+        raise Exception("There was an error pushing to github from %s: %s" % (url, output))
+
+def clone_repo (url):
+    print("Cloning " + url)
+    status, output = commands.getstatusoutput('git clone '+url)
+
+    if status != 0:
+        raise Exception("There was an error cloning %s: %s" % (url, output))
+
+    cwd = os.getcwd()
+    os.chdir(url.split('/')[-1])
+    commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, url.split('/')[-1]))
+    os.chdir(cwd)
+
+def checkout_repo (repo):
+    if os.path.exists(repo['repository'].split('/')[-1]):
+        pull_all_branches (repo['repository'])
+        return
+
+    clone_repo (repo['repository'])
+
+def checkout_all_repos ():
+    #NOTE: Getting just one repo for testing purposes
+    checkout_repo (list_repositories()[0])
+
+checkout_all_repos ()
