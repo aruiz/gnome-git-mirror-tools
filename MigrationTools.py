@@ -55,7 +55,11 @@ class GitHub:
         request = urllib2.Request('https://github.com/api/v2/json/repos/create', data)
         base64string = base64.encodestring('%s:%s' % (self.user, self.pw)).replace('\n', '')
         request.add_header("Authorization", "Basic %s" % base64string)
-        result = urllib2.urlopen(request)
+        try:
+            result = urllib2.urlopen(request)
+        except urllib2.HTTPError as e:
+            if e.code != 422:
+                raise
 
     def check_if_repo_exists (self):
         pass
@@ -65,11 +69,11 @@ class Gnome:
         pass
     def list_repositories (self):
         return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
-    def checkout_all_repos (self):
-        #NOTE: Getting just one repo for testing purposes
-        r = Repo(self.list_repositories()[0])
-        r.checkout_repo ()
-        r.push_all_branches ()
+    def mirror_all_repos (self):
+        for repo_info in self.list_repositories():
+            r = Repo (repo_info)
+            r.checkout_repo ()
+            r.push_all_branches ()
 
 class Repo:
     def __init__(self, repo):
@@ -78,6 +82,7 @@ class Repo:
         self.description = repo['name']
 
     def pull_all_branches (self):
+        print ("Pulling updates from %s" % self.url)
         cwd = os.getcwd()
         os.chdir(self.name)
         status, output = commands.getstatusoutput('git pull --all')
@@ -87,6 +92,8 @@ class Repo:
             raise Exception("There was an error pulling from origin in %s: %s" % (self.url, output))
 
     def push_all_branches (self):
+        #FIXME: Make it pull all actuall branches
+        print ("Pushing updates from %s to github" % self.url)
         gh = GitHub()
         gh.create_github_repo (self.name, self.description)
 
@@ -112,9 +119,15 @@ class Repo:
         if status != 0:
             raise Exception("There was an error cloning %s: %s" % (self.url, output))
 
+        #FIXME: Make it pull all actuall branches
         cwd = os.getcwd()
         os.chdir(self.name)
         commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, self.name))
+        commands.getstatusoutput("git config --add remote.origin.push 'refs/heads/*:refs/heads/*'")
+        commands.getstatusoutput("git config --add remote.origin.push 'refs/tags/*:refs/tags/*'")
+        commands.getstatusoutput("git config --add remote.origin.fetch 'refs/heads/*:refs/remotes/origin/*'")
+        commands.getstatusoutput("git config --add remote.origin.fetch 'refs/tags/*:refs/tags/*'")
+        status, output = commands.getstatusoutput('git pull --all')
         os.chdir(cwd)
 
     def checkout_repo (self):
@@ -123,4 +136,8 @@ class Repo:
             return
 
         self.clone_repo ()
+
+if __name__ == '__main__':
+    g = Gnome()
+    g.mirror_all_repos ()
 
