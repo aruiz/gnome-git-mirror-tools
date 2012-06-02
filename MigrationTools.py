@@ -109,15 +109,7 @@ class Repo:
 
         cwd = os.getcwd()
         os.chdir(self.dir)
-        status, output = commands.getstatusoutput('git push')
-        os.chdir(cwd)
-
-        if status != 0:
-            raise Exception("There was an error pushing to github from %s: %s" % (self.url, output))
-
-        return
-        os.chdir(self.dir)
-        status, output = commands.getstatusoutput('git push --tags')
+        status, output = commands.getstatusoutput('git push --mirror')
         os.chdir(cwd)
 
         if status != 0:
