@@ -49,9 +49,17 @@ class GitHub:
         self.user = config.get('Github', 'user')
         self.pw   = config.get('Github', 'password')
 
+    def normalize_name (self, name):
+        if name == 'gtk+':
+            return 'gtk'
+        if name == 'libxml++':
+            return 'libxmlmm'
+        if name == 'libsig++2':
+            'libsigpp2'
+        return name
+
     def create_github_repo (self, name, description):
-        #TODO: Check whether it exists already
-        data = urllib.urlencode({'name': ORGANIZATION+"/"+name, 'description': description})
+        data = urllib.urlencode({'name': ORGANIZATION+"/"+self.normalize_name(name), 'description': description})
         request = urllib2.Request('https://github.com/api/v2/json/repos/create', data)
         base64string = base64.encodestring('%s:%s' % (self.user, self.pw)).replace('\n', '')
         request.add_header("Authorization", "Basic %s" % base64string)
@@ -80,12 +88,14 @@ class Repo:
         self.url = repo['repository']
         self.name = self.url.split('/')[-1]
         self.description = repo['name']
+        self.dir = self.name + '.git'
 
     def pull_all_branches (self):
         print ("Pulling updates from %s" % self.url)
         cwd = os.getcwd()
-        os.chdir(self.name)
-        status, output = commands.getstatusoutput('git pull --all')
+        os.chdir(self.dir)
+        status, output = commands.getstatusoutput('git remote update')
+        status, output = commands.getstatusoutput('git fetch origin')
         os.chdir(cwd)
 
         if status != 0:
@@ -98,14 +108,15 @@ class Repo:
         gh.create_github_repo (self.name, self.description)
 
         cwd = os.getcwd()
-        os.chdir(self.name)
-        status, output = commands.getstatusoutput('git push --all')
+        os.chdir(self.dir)
+        status, output = commands.getstatusoutput('git push')
         os.chdir(cwd)
 
         if status != 0:
             raise Exception("There was an error pushing to github from %s: %s" % (self.url, output))
 
-        os.chdir(self.name)
+        return
+        os.chdir(self.dir)
         status, output = commands.getstatusoutput('git push --tags')
         os.chdir(cwd)
 
@@ -114,15 +125,17 @@ class Repo:
 
     def clone_repo (self):
         print("Cloning " + self.url)
-        status, output = commands.getstatusoutput('git clone '+self.url)
+        status, output = commands.getstatusoutput('git clone --mirror '+self.url)
 
         if status != 0:
             raise Exception("There was an error cloning %s: %s" % (self.url, output))
 
+        githubname = GitHub().normalize_name (self.name)
+
         #FIXME: Make it pull all actuall branches
         cwd = os.getcwd()
-        os.chdir(self.name)
-        commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, self.name))
+        os.chdir(self.dir)
+        commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, githubname))
         commands.getstatusoutput("git config --add remote.origin.push 'refs/heads/*:refs/heads/*'")
         commands.getstatusoutput("git config --add remote.origin.push 'refs/tags/*:refs/tags/*'")
         commands.getstatusoutput("git config --add remote.origin.fetch 'refs/heads/*:refs/remotes/origin/*'")
@@ -131,7 +144,7 @@ class Repo:
         os.chdir(cwd)
 
     def checkout_repo (self):
-        if os.path.exists(self.name):
+        if os.path.exists(self.dir):
             self.pull_all_branches ()
             return
 
