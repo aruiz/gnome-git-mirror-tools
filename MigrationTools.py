@@ -30,59 +30,97 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import json
+import urllib
 import urllib2
 import commands
 import os
 import os.path
+import ConfigParser
+import base64
 
 ORGANIZATION="GNOME-Project"
 SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
 
-def create_github_reop ():
+class GitHub:
+    def __init__ (self):
+        config = ConfigParser.ConfigParser()
+        #TODO: Inform the user what to do one the file is not there
+        config.read(os.path.expanduser('~/.gitmirrorrc'))
+        self.user = config.get('Github', 'user')
+        self.pw   = config.get('Github', 'password')
 
+    def create_github_repo (self, name, description):
+        #TODO: Check whether it exists already
+        data = urllib.urlencode({'name': ORGANIZATION+"/"+name, 'description': description})
+        request = urllib2.Request('https://github.com/api/v2/json/repos/create', data)
+        base64string = base64.encodestring('%s:%s' % (self.user, self.pw)).replace('\n', '')
+        request.add_header("Authorization", "Basic %s" % base64string)
+        result = urllib2.urlopen(request)
 
-def list_repositories ():
-    return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
+    def check_if_repo_exists (self):
+        pass
 
-def pull_all_branches (url):
-    cwd = os.getcwd()
-    os.chdir(url.split('/')[-1])
-    status, output = commands.getstatusoutput('git pull --all')
-    os.chdir(cwd)
+class Gnome:
+    def __init__(self):
+        pass
+    def list_repositories (self):
+        return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
+    def checkout_all_repos (self):
+        #NOTE: Getting just one repo for testing purposes
+        r = Repo(self.list_repositories()[0])
+        r.checkout_repo ()
+        r.push_all_branches ()
 
-    if status != 0:
-        raise Exception("There was an error pulling from origin in %s: %s" % (url, output))
+class Repo:
+    def __init__(self, repo):
+        self.url = repo['repository']
+        self.name = self.url.split('/')[-1]
+        self.description = repo['name']
 
-def push_all_branches (url):
-    cwd = os.getcwd()
-    os.chdir(url.split('/')[-1])
-    status, output = commands.getstatusoutput('git push --all github')
-    os.chdir(cwd)
+    def pull_all_branches (self):
+        cwd = os.getcwd()
+        os.chdir(self.name)
+        status, output = commands.getstatusoutput('git pull --all')
+        os.chdir(cwd)
 
-    if status != 0:
-        raise Exception("There was an error pushing to github from %s: %s" % (url, output))
+        if status != 0:
+            raise Exception("There was an error pulling from origin in %s: %s" % (self.url, output))
 
-def clone_repo (url):
-    print("Cloning " + url)
-    status, output = commands.getstatusoutput('git clone '+url)
+    def push_all_branches (self):
+        gh = GitHub()
+        gh.create_github_repo (self.name, self.description)
 
-    if status != 0:
-        raise Exception("There was an error cloning %s: %s" % (url, output))
+        cwd = os.getcwd()
+        os.chdir(self.name)
+        status, output = commands.getstatusoutput('git push --all')
+        os.chdir(cwd)
 
-    cwd = os.getcwd()
-    os.chdir(url.split('/')[-1])
-    commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, url.split('/')[-1]))
-    os.chdir(cwd)
+        if status != 0:
+            raise Exception("There was an error pushing to github from %s: %s" % (self.url, output))
 
-def checkout_repo (repo):
-    if os.path.exists(repo['repository'].split('/')[-1]):
-        pull_all_branches (repo['repository'])
-        return
+        os.chdir(self.name)
+        status, output = commands.getstatusoutput('git push --tags')
+        os.chdir(cwd)
 
-    clone_repo (repo['repository'])
+        if status != 0:
+            raise Exception("There was an error pushing to github from %s: %s" % (self.url, output))
 
-def checkout_all_repos ():
-    #NOTE: Getting just one repo for testing purposes
-    checkout_repo (list_repositories()[0])
+    def clone_repo (self):
+        print("Cloning " + self.url)
+        status, output = commands.getstatusoutput('git clone '+self.url)
 
-checkout_all_repos ()
+        if status != 0:
+            raise Exception("There was an error cloning %s: %s" % (self.url, output))
+
+        cwd = os.getcwd()
+        os.chdir(self.name)
+        commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, self.name))
+        os.chdir(cwd)
+
+    def checkout_repo (self):
+        if os.path.exists(self.name):
+            self.pull_all_branches ()
+            return
+
+        self.clone_repo ()
+
