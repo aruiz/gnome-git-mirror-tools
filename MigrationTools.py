@@ -37,8 +37,10 @@ import os
 import os.path
 import ConfigParser
 import base64
+import getopt, sys
 
 ORGANIZATION="GNOME-Project"
+SKIP='gtk-vnc'
 SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
 
 class GitHub:
@@ -77,12 +79,35 @@ class Gnome:
         pass
     def list_repositories (self):
         return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
-    def mirror_all_repos (self):
-        for repo_info in self.list_repositories():
-            r = Repo (repo_info)
-            r.checkout_repo ()
-            r.push_all_branches ()
+    def mirror_repo (self, repo):
+        r = Repo (repo)
+        r.checkout_repo ()
+        r.push_all_branches ()
+    def get_index_for_name (self, all_repos, starting_from):
+            index = 0
+            for repo in all_repos:
+                if repo['repository'].split('/')[-1] == starting_from:
+                    break
+                index += 1
 
+            if index >= len(all_repos):
+                return 0
+
+            return index
+
+    def mirror_all_repos (self, starting_from=None):
+        all_repos = self.list_repositories()
+
+        if starting_from:
+            starts_at = self.get_index_for_name (all_repos, starting_from)
+        else:
+            starts_at = 0
+
+        for repo in all_repos[starts_at:]:
+            if repo['name'] in SKIP:
+                continue
+            self.mirror_repo (repo)
+        
 class Repo:
     def __init__(self, repo):
         self.url = repo['repository']
@@ -143,6 +168,11 @@ class Repo:
         self.clone_repo ()
 
 if __name__ == '__main__':
-    g = Gnome()
-    g.mirror_all_repos ()
+    starting_at = None
+    optlist, args = getopt.getopt (sys.argv[1:], "", ['starting_at='])
+    for opt in optlist:
+        if opt[0] == "--starting_at":
+            starting_at = opt[1]
 
+    g = Gnome()
+    g.mirror_all_repos (starting_at)
