@@ -79,10 +79,11 @@ class Gnome:
         pass
     def list_repositories (self):
         return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
-    def mirror_repo (self, repo):
+    def mirror_repo (self, repo, download_only=False):
         r = Repo (repo)
         r.checkout_repo ()
-        r.push_all_branches ()
+        if not download_only:
+            r.push_all_branches ()
     def get_index_for_name (self, all_repos, starting_from):
             index = 0
             for repo in all_repos:
@@ -95,7 +96,7 @@ class Gnome:
 
             return index
 
-    def mirror_all_repos (self, starting_from=None):
+    def mirror_all_repos (self, starting_from=None, download_only=False):
         all_repos = self.list_repositories()
 
         if starting_from:
@@ -106,7 +107,7 @@ class Gnome:
         for repo in all_repos[starts_at:]:
             if repo['name'] in SKIP:
                 continue
-            self.mirror_repo (repo)
+            self.mirror_repo (repo, download_only)
         
 class Repo:
     def __init__(self, repo):
@@ -163,10 +164,13 @@ class Repo:
 
 if __name__ == '__main__':
     starting_at = None
-    optlist, args = getopt.getopt (sys.argv[1:], "", ['starting_at='])
+    download_only = False
+    optlist, args = getopt.getopt (sys.argv[1:], "", ['start-at=', 'download-only'])
     for opt in optlist:
-        if opt[0] == "--starting_at":
+        if opt[0] == '--start-at':
             starting_at = opt[1]
+        elif opt[0] == '--download-only':
+            download_only = True
 
     g = Gnome()
-    g.mirror_all_repos (starting_at)
+    g.mirror_all_repos (starting_at, download_only)
