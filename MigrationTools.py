@@ -39,7 +39,7 @@ import ConfigParser
 import base64
 import getopt, sys
 
-ORGANIZATION="GNOME-Project"
+ORGANIZATION="GNOME"
 SKIP='gtk-vnc'
 SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
 
