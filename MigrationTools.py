@@ -56,8 +56,8 @@ class GitHub:
             return 'gtk'
         if name == 'libxml++':
             return 'libxmlmm'
-        if name == 'libsig++2':
-            'libsigpp2'
+        if name == 'libsigc++2':
+            return 'libsigcpp2'
         return name
 
     def create_github_repo (self, name, description):
@@ -149,15 +149,9 @@ class Repo:
 
         githubname = GitHub().normalize_name (self.name)
 
-        #FIXME: Make it pull all actuall branches
         cwd = os.getcwd()
         os.chdir(self.dir)
         commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, githubname))
-        #commands.getstatusoutput("git config --add remote.origin.push 'refs/heads/*:refs/heads/*'")
-        #commands.getstatusoutput("git config --add remote.origin.push 'refs/tags/*:refs/tags/*'")
-        #commands.getstatusoutput("git config --add remote.origin.fetch 'refs/heads/*:refs/remotes/origin/*'")
-        #commands.getstatusoutput("git config --add remote.origin.fetch 'refs/tags/*:refs/tags/*'")
-        #status, output = commands.getstatusoutput('git pull --all')
         os.chdir(cwd)
 
     def checkout_repo (self):
