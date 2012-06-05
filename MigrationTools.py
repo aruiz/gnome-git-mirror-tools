@@ -87,7 +87,7 @@ class Gnome:
     def get_index_for_name (self, all_repos, starting_from):
             index = 0
             for repo in all_repos:
-                if repo['repository'].split('/')[-1] == starting_from:
+                if repo['name'] == starting_from:
                     break
                 index += 1
 
@@ -112,8 +112,8 @@ class Gnome:
 class Repo:
     def __init__(self, repo):
         self.url = repo['repository']
-        self.name = self.url.split('/')[-1]
-        self.description = repo['name']
+        self.name = repo['name']
+        self.description = repo['description']
         self.dir = self.name + '.git'
 
     def pull_all_branches (self):
