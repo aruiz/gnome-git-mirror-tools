@@ -60,8 +60,14 @@ class GitHub:
             return 'libsigcpp2'
         return name
 
-    def create_github_repo (self, name, description):
-        data = urllib.urlencode({'name': ORGANIZATION+"/"+self.normalize_name(name), 'description': description})
+    def create_github_repo (self, name, description, homepage):
+        data = urllib.urlencode({
+                                 'name': ORGANIZATION+"/"+self.normalize_name(name),
+                                 'description': description,
+                                 'homepage': homepage,
+                                 'has_wiki': False,
+                                 'has_issues': False
+                                 })
         request = urllib2.Request('https://github.com/api/v2/json/repos/create', data)
         base64string = base64.encodestring('%s:%s' % (self.user, self.pw)).replace('\n', '')
         request.add_header("Authorization", "Basic %s" % base64string)
@@ -114,6 +120,7 @@ class Repo:
         self.url = repo['repository']
         self.name = repo['name']
         self.description = repo['description']
+        self.homepage = repo['homepage']
         self.dir = self.name + '.git'
 
     def pull_all_branches (self):
@@ -131,7 +138,7 @@ class Repo:
         #FIXME: Make it pull all actuall branches
         print ("Pushing updates from %s to github" % self.url)
         gh = GitHub()
-        gh.create_github_repo (self.name, self.description)
+        gh.create_github_repo (self.name, self.description, self.homepage)
 
         cwd = os.getcwd()
         os.chdir(self.dir)
