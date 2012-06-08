@@ -119,7 +119,7 @@ class Repo:
     def __init__(self, repo):
         self.url = repo['repository']
         self.name = repo['name']
-        self.description = repo['description']
+        self.description = repo['description'].encode('utf16')
         self.homepage = repo['homepage']
         self.dir = self.name + '.git'
 
