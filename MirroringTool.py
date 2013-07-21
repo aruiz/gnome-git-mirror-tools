@@ -30,26 +30,33 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import json
-import urllib
-import urllib2
-import commands
+import requests
 import os
+import sys
 import os.path
-import ConfigParser
 import base64
 import getopt, sys
+import subprocess
+import shlex
+import scrapper
+import configparser
 
 ORGANIZATION="GNOME"
-SKIP='gtk-vnc'
-SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
+SKIP=['gtk-vnc',]
+#SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
 
 class GitHub:
     def __init__ (self):
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         #TODO: Inform the user what to do one the file is not there
-        config.read(os.path.expanduser('~/.gitmirrorrc'))
-        self.user = config.get('Github', 'user')
-        self.pw   = config.get('Github', 'password')
+        try:
+            config.read(os.path.expanduser('~/.gitmirrorrc'))
+            self.user = config.get('Github', 'user')
+            self.pw   = config.get('Github', 'password')
+        except configparser.NoSectionError:
+            raise Exception ("~/.gitmirrorrc non existant or missing [Github] section with user and password keys")
+        except configparser.NoOptionError:
+            raise Exception ("~/.gitmirrorrc misses user or/and password keys in the [Github] section")
 
     def normalize_name (self, name):
         if name == 'gtk+':
@@ -61,30 +68,29 @@ class GitHub:
         return name
 
     def create_github_repo (self, name, description, homepage):
-        data = urllib.urlencode({
-                                 'name': ORGANIZATION+"/"+self.normalize_name(name),
-                                 'description': description,
-                                 'homepage': homepage,
-                                 'has_wiki': False,
-                                 'has_issues': False
-                                 })
-        request = urllib2.Request('https://github.com/api/v2/json/repos/create', data)
-        base64string = base64.encodestring('%s:%s' % (self.user, self.pw)).replace('\n', '')
-        request.add_header("Authorization", "Basic %s" % base64string)
-        try:
-            result = urllib2.urlopen(request)
-        except urllib2.HTTPError as e:
-            if e.code != 422:
-                raise
-
+        payload = json.dumps({
+                             'name': self.normalize_name(name),
+                             'description': description,
+                             'homepage': homepage,
+                             'has_wiki': False,
+                             'has_issues': False
+                             })
+        rq = requests.post('https://api.github.com/orgs/'+ORGANIZATION,
+                           auth=(self.user, self.pw),
+                           data=payload)
+        if rq.status_code != 200:
+            raise Exception ("Request to create %s failed with code %d:\n%s" % (name,rq.status_code,rq.text))
+        
     def check_if_repo_exists (self):
         pass
 
 class Gnome:
     def __init__(self):
         pass
+
     def list_repositories (self):
-        return json.loads(urllib2.urlopen (SCRAPER_QUERY).read())
+        return scrapper.doap_to_python ()
+
     def mirror_repo (self, repo, download_only=False):
         r = Repo (repo)
         r.checkout_repo ()
@@ -114,12 +120,15 @@ class Gnome:
             if repo['name'] in SKIP:
                 continue
             self.mirror_repo (repo, download_only)
-        
+
+def gitcall (call):
+    return subprocess.call(shlex.split(call))
+
 class Repo:
     def __init__(self, repo):
         self.url = repo['repository']
         self.name = repo['name']
-        self.description = repo['description'].encode('utf16')
+        self.description = repo['description']
         self.homepage = repo['homepage']
         self.dir = self.name + '.git'
 
@@ -127,12 +136,13 @@ class Repo:
         print ("Pulling updates from %s" % self.url)
         cwd = os.getcwd()
         os.chdir(self.dir)
-        status, output = commands.getstatusoutput('git remote update')
-        status, output = commands.getstatusoutput('git fetch origin')
-        os.chdir(cwd)
-
-        if status != 0:
-            raise Exception("There was an error pulling from origin in %s: %s" % (self.url, output))
+        try:    
+            gitcall('git remote update')
+            gitcall('git fetch origin')
+        except OSError:
+            raise Exception("There was an error pulling from origin in %s" % (self.url))
+        finally:
+            os.chdir(cwd)
 
     def push_all_branches (self):
         #FIXME: Make it pull all actuall branches
@@ -140,27 +150,37 @@ class Repo:
         gh = GitHub()
         gh.create_github_repo (self.name, self.description, self.homepage)
 
+        self.config_origin ()
+
         cwd = os.getcwd()
         os.chdir(self.dir)
-        status, output = commands.getstatusoutput('git push --mirror')
-        os.chdir(cwd)
+        try:
+            gitcall('git push --mirror')
+        except OSError:
+            raise Exception("There was an error pushing to github from %s" % (self.url))
+        finally:
+            os.chdir(cwd)
 
-        if status != 0:
-            raise Exception("There was an error pushing to github from %s: %s" % (self.url, output))
+    def config_origin (self):
+        cwd = os.getcwd()
+        os.chdir(self.dir)
+        try:
+            gitcall('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, githubname))
+        except OSError:
+            raise Exception("There was an error configuring the git repo %s" % self.name)
+        finally:
+            os.chdir(cwd)
 
     def clone_repo (self):
         print("Cloning " + self.url)
-        status, output = commands.getstatusoutput('git clone --mirror '+self.url)
-
-        if status != 0:
-            raise Exception("There was an error cloning %s: %s" % (self.url, output))
+        try:
+            gitcall('git clone --mirror '+self.url)
+        except OSError:
+            raise Exception("There was an error cloning %s" % (self.url))
 
         githubname = GitHub().normalize_name (self.name)
 
-        cwd = os.getcwd()
-        os.chdir(self.dir)
-        commands.getstatusoutput('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, githubname))
-        os.chdir(cwd)
+        self.config_origin ()
 
     def checkout_repo (self):
         if os.path.exists(self.dir):
@@ -176,7 +196,7 @@ if __name__ == '__main__':
     for opt in optlist:
         if opt[0] == '--start-at':
             starting_at = opt[1]
-        elif opt[0] == '--download-only':
+        if opt[0] == '--download-only':
             download_only = True
 
     g = Gnome()
