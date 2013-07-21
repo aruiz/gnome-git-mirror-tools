@@ -35,3 +35,25 @@ def doap_to_python ():
     repos_list.append(obj)
 
   return repos_list
+
+def list_repos ():
+  rq = requests.get('https://git.gnome.org/repositories.doap')
+  repos = et.fromstring(rq.text)
+  nss = {'doap': 'http://usefulinc.com/ns/doap#',
+         'rdf':  'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}
+
+  projects = repos.findall('doap:Project', nss)
+
+  repos_list = []
+
+  for prj in projects:
+    resource = '{%s}resource' % nss['rdf']
+
+    repo = prj.find('doap:repository/doap:GitRepository/doap:location', nss)
+    repo = repo.get(resource)
+    if '+' in str(repo):
+      print (repo)
+
+if __name__ == '__main__':
+  list_repos ()
+
