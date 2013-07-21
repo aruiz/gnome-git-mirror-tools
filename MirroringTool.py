@@ -164,6 +164,9 @@ class Repo:
     def config_origin (self):
         cwd = os.getcwd()
         os.chdir(self.dir)
+
+        githubname = GitHub().normalize_name (self.name)
+
         try:
             gitcall('git config remote.origin.pushurl git@github.com:%s/%s.git' % (ORGANIZATION, githubname))
         except OSError:
@@ -177,8 +180,6 @@ class Repo:
             gitcall('git clone --mirror '+self.url)
         except OSError:
             raise Exception("There was an error cloning %s" % (self.url))
-
-        githubname = GitHub().normalize_name (self.name)
 
         self.config_origin ()
 
