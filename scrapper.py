@@ -51,8 +51,7 @@ def list_repos ():
 
     repo = prj.find('doap:repository/doap:GitRepository/doap:location', nss)
     repo = repo.get(resource)
-    if '+' in str(repo):
-      print (repo)
+    print (repo)
 
 if __name__ == '__main__':
   list_repos ()
