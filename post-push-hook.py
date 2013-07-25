@@ -35,8 +35,9 @@ import subprocess
 import shlex
 import configparser
 import xml.etree.ElementTree as et
-#import smtplib
-#import logging
+import smtplib
+from email.mime.text import MIMEText
+import tempfile
 
 ORGANIZATION="GNOME"
 name_maps = {"gtk+":       "gtk",
@@ -46,7 +47,6 @@ name_maps = {"gtk+":       "gtk",
 class GitHub:
     def __init__ (self):
         config = configparser.ConfigParser()
-        #TODO: Inform the user what to do one the file is not there
         try:
             config.read(os.path.expanduser('~/.gitmirrorrc'))
             self.user = config.get('Github', 'user')
@@ -82,7 +82,7 @@ class GitHub:
 
 def normalize_name (name):
     if "+" in name:
-        raise Exception("%s has a '+' character in it which is unsupported bit Github" % name)
+        raise Exception("%s has a '+' character in it which is unsupported bit Github.\nYou have to add it to the exception maps in the post-update hook." % name)
     if name in name_maps.keys():
         return name_maps[name]
 
@@ -135,9 +135,26 @@ def main ():
         settings = get_repo_settings (repo_name)
     try:
         command = 'git push --mirror git@github.com:%s/%s' % (ORGANIZATION, github_name)
-        subprocess.call(shlex.split(command), stderr=open("/tmp/foo.err", "w"), stdout=open("/tmp/foo.out", "w"))
-    except OSError:
-        raise
+        out = tempfile.NamedTemporaryFile (prefix="github",suffix="std")
+        err = tempfile.NamedTemporaryFile (prefix="github",suffix="err")
+        subprocess.check_call(shlex.split(command), stderr=err, stdout=out)
+        out.close()
+        err.close()
+    except subprocess.CalledProcessError:
+        out = open(out.name, "r")
+        err = open(err.name, "r")
+        raise Exception("Error trying to push branch %s\nSTDOUT:\n%s\nSTDERR\n%s" % (repo_name, out.read(), err.read()))
 
 if __name__ == "__main__":
-    main ()
+    try:
+        main ()
+    except Exception as e:
+        msg = MIMEText(str(e))
+        msg['Subject'] = "[GITHUB HOOK] ERROR trying to push %s" %  os.getcwd ()
+        msg['From']    = "gnome-sysadmin@gnome.org"
+        msg['To']      = "gnome-sysadmin@gnome.org"
+        msg['X-GNOME-SERVICE'] = "github-mirror"
+        server = smtplib.SMTP("localhost")
+        server.send_message (msg)
+        server.quit ()
+        raise e
