@@ -38,6 +38,7 @@ import xml.etree.ElementTree as et
 import smtplib
 from email.mime.text import MIMEText
 import tempfile
+import json
 
 ORGANIZATION="GNOME"
 name_maps = {"gtk+":       "gtk",
@@ -74,19 +75,21 @@ class GitHub:
                              'has_wiki': False,
                              'has_issues': False
                              })
-        rq = requests.post('https://api.github.com/orgs/'+ORGANIZATION,
+        rq = requests.post('https://api.github.com/orgs/'+ORGANIZATION+'/repos',
                            auth=(self.user, self.pw),
                            data=payload)
         if rq.status_code == 200:
             return
 
-def normalize_name (name):
-    if "+" in name:
-        raise Exception("%s has a '+' character in it which is unsupported bit Github.\nYou have to add it to the exception maps in the post-update hook." % name)
-    if name in name_maps.keys():
-        return name_maps[name]
+        raise Exception("There was an error attempting to create the repo %s in github:\n\nStatus: %d\nText:\n%s" % (name, rq.status_code, rq.text))
 
-    return name
+    def normalize_name (self, name):
+        if "+" in name:
+            raise Exception("%s has a '+' character in it which is unsupported by Github.\nYou have to add it to the exception maps in the post-update hook." % name)
+        if name in name_maps.keys():
+            return name_maps[name]
+
+        return name
 
 def get_repo_name ():
     repo_name = os.getcwd ().split("/")[-1]

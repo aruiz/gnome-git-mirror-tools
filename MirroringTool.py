@@ -42,7 +42,7 @@ import scrapper
 import configparser
 
 ORGANIZATION="GNOME"
-SKIP=['gtk-vnc',]
+SKIP=[] #SKIP=['gtk-vnc',]
 #SCRAPER_QUERY="https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=gnome_git_projects&query=select%20*%20from%20%60swdata%60"
 
 class GitHub:
