@@ -32,7 +32,9 @@ import os
 import sys
 import requests
 import subprocess
+import shlex
 import configparser
+import xml.etree.ElementTree as et
 #import smtplib
 #import logging
 
@@ -86,23 +88,56 @@ def normalize_name (name):
 
     return name
 
+def get_repo_name ():
+    repo_name = os.getcwd ().split("/")[-1]
+    if repo_name == ".git":
+        repo_name = os.getcwd ().split("/")[-2]
+    elif repo_name.endswith(".git"):
+        repo_name = repo_name[0:-4]
+    return repo_name
+
+def get_repo_settings (name):
+    nss = {'doap': 'http://usefulinc.com/ns/doap#',
+           'rdf':  'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}
+    doap_url = "https://git.gnome.org/browse/%s/plain/%s.doap" % (name, name)
+
+    rq = requests.get(doap_url)
+    if rq != 200:
+        raise Exception ("Could not get doap: %s", doap_url)
+
+    prj = et.fromstring (rq.text)
+
+    resource = '{%s}resource' % nss['rdf']
+
+    repo = prj.find('doap:repository/doap:GitRepository/doap:location', nss)
+    name = prj.find ('doap:name', nss)
+    desc = prj.find('doap:shortdesc', nss)
+    homepage = prj.find('doap:homepage/[@rdf:resource]', nss)
+    category = prj.find('doap:category/[@rdf:resource]', nss)
+
+    repo = repo.get(resource)
+    name = name.text if name else repo.split('/')[-1]
+    descdesc = desc.text if desc else name
+    homepage = homepage.get(resource) if homepage else 'http://www.gnome.org/'
+    category = category.get(resource) if category else 'gnome'
+
+    return { "category":    category.encode('utf-8').decode('utf-8'),
+             "homepage":    homepage.encode('utf-8').decode('utf-8'),
+             "name":        name.encode('utf-8').decode('utf-8'),
+             "repository":  repo.encode('utf-8').decode('utf-8'),
+             "description": desc.encode('utf-8').decode('utf-8')}
+
 def main ():
     gh = GitHub ()
-    repo_name = os.getcwd ().split("/")[-2]
+    repo_name = get_repo_name ()
     github_name = normalize_name (repo_name)
     if not gh.check_if_repo_exists(repo_name):
-        #TODO: Get doap file
-        pass
-    
+        settings = get_repo_settings (repo_name)
     try:
-        'git push --mirror git@github.com:%s/%s' % (ORGANIZATION, github_name)
-        subprocess.call(shlex.split())
-    except OSERror:
+        command = 'git push --mirror git@github.com:%s/%s' % (ORGANIZATION, github_name)
+        subprocess.call(shlex.split(command), stderr=open("/tmp/foo.err", "w"), stdout=open("/tmp/foo.out", "w"))
+    except OSError:
         raise
 
 if __name__ == "__main__":
-    try:
-        main ()
-    except:
-        #TODO: Send an email to the sysadmins
-        pass
+    main ()
