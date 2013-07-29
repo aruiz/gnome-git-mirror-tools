@@ -112,22 +112,16 @@ def get_repo_settings (name):
 
     resource = '{%s}resource' % nss['rdf']
 
-    repo = prj.find('doap:repository/doap:GitRepository/doap:location', nss)
-    name = prj.find ('doap:name', nss)
-    desc = prj.find('doap:shortdesc', nss)
-    homepage = prj.find('doap:homepage/[@rdf:resource]', nss)
-    category = prj.find('doap:category/[@rdf:resource]', nss)
+    name = prj.find ('{%s}name' % nss["doap"])
+    desc = prj.find('{%s}shortdesc' % nss["doap"])
+    homepage = prj.find('{%s}homepage/[{%s}resource]', (nss["doap"], nss["rdf"]))
 
-    repo = repo.get(resource) if repo else "git://git.gnome.org/%s" % name
     name = name.text if name != None else repo.split('/')[-1]
     desc = desc.text if desc != None else name
     homepage = homepage.get(resource) if homepage != None else 'http://www.gnome.org/'
-    category = category.get(resource) if category != None else 'gnome'
 
-    return { "category":    category.encode('utf-8').decode('utf-8'),
-             "homepage":    homepage.encode('utf-8').decode('utf-8'),
+    return { "homepage":    homepage.encode('utf-8').decode('utf-8'),
              "name":        name.encode('utf-8').decode('utf-8'),
-             "repository":  repo.encode('utf-8').decode('utf-8'),
              "description": desc.encode('utf-8').decode('utf-8')}
 
 def main ():
@@ -150,7 +144,6 @@ def main ():
         raise Exception("Error trying to push branch %s\nSTDOUT:\n%s\nSTDERR\n%s" % (repo_name, out.read(), err.read()))
 
 if __name__ == "__main__":
-    main()
     try:
         main ()
     except Exception as e:
