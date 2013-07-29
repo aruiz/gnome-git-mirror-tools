@@ -114,11 +114,13 @@ def get_repo_settings (name):
 
     name = prj.find ('{%s}name' % nss["doap"])
     desc = prj.find('{%s}shortdesc' % nss["doap"])
-    homepage = prj.find('{%s}homepage/[{%s}resource]' % (nss["doap"], nss["rdf"]))
+    homepage = prj.find('{%s}homepage' % nss["doap"])
 
     name = name.text if name != None else repo.split('/')[-1]
     desc = desc.text if desc != None else name
+
     homepage = homepage.get(resource) if homepage != None else 'http://www.gnome.org/'
+    homepage = homepage if homepage != None else 'http://www.gnome.org/'
 
     return { "homepage":    homepage.encode('utf-8').decode('utf-8'),
              "name":        name.encode('utf-8').decode('utf-8'),
