@@ -1,4 +1,4 @@
-#!/usr/bin/python2.6
+#!/usr/bin/python2
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 """
 Copyright (c) 2013 Alberto Ruiz <aruiz@gnome.org>
@@ -78,7 +78,7 @@ class GitHub:
         rq = requests.post('https://api.github.com/orgs/'+ORGANIZATION+'/repos',
                            auth=(self.user, self.pw),
                            data=payload)
-        if rq.status_code == 200:
+        if rq.status_code == 201:
             return
 
         raise Exception("There was an error attempting to create the repo %s in github:\n\nStatus: %d\nText:\n%s" % (name, rq.status_code, rq.text))
@@ -118,11 +118,11 @@ def get_repo_settings (name):
     homepage = prj.find('doap:homepage/[@rdf:resource]', nss)
     category = prj.find('doap:category/[@rdf:resource]', nss)
 
-    repo = repo.get(resource)
-    name = name.text if name else repo.split('/')[-1]
-    descdesc = desc.text if desc else name
-    homepage = homepage.get(resource) if homepage else 'http://www.gnome.org/'
-    category = category.get(resource) if category else 'gnome'
+    repo = repo.get(resource) if repo else "git://git.gnome.org/%s" % name
+    name = name.text if name != None else repo.split('/')[-1]
+    desc = desc.text if desc != None else name
+    homepage = homepage.get(resource) if homepage != None else 'http://www.gnome.org/'
+    category = category.get(resource) if category != None else 'gnome'
 
     return { "category":    category.encode('utf-8').decode('utf-8'),
              "homepage":    homepage.encode('utf-8').decode('utf-8'),
@@ -136,6 +136,7 @@ def main ():
     github_name = gh.normalize_name (repo_name)
     if not gh.check_if_repo_exists(repo_name):
         settings = get_repo_settings (repo_name)
+        gh.create_github_repo (settings["name"], settings["description"], settings["homepage"])
     try:
         command = 'git push --mirror git@github.com:%s/%s' % (ORGANIZATION, github_name)
         out = tempfile.NamedTemporaryFile (prefix="github",suffix="std")
@@ -149,6 +150,7 @@ def main ():
         raise Exception("Error trying to push branch %s\nSTDOUT:\n%s\nSTDERR\n%s" % (repo_name, out.read(), err.read()))
 
 if __name__ == "__main__":
+    main()
     try:
         main ()
     except Exception as e:
