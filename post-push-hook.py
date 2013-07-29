@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python2.6
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 """
 Copyright (c) 2013 Alberto Ruiz <aruiz@gnome.org>
@@ -33,7 +33,7 @@ import sys
 import requests
 import subprocess
 import shlex
-import configparser
+import ConfigParser
 import xml.etree.ElementTree as et
 import smtplib
 from email.mime.text import MIMEText
@@ -47,14 +47,14 @@ name_maps = {"gtk+":       "gtk",
 
 class GitHub:
     def __init__ (self):
-        config = configparser.ConfigParser()
+        config = ConfigParser.ConfigParser()
         try:
-            config.read(os.path.expanduser('~/.gitmirrorrc'))
+            config.read(os.path.expanduser('/etc/gitmirrorrc'))
             self.user = config.get('Github', 'user')
             self.pw   = config.get('Github', 'password')
-        except configparser.NoSectionError:
+        except ConfigParser.NoSectionError:
             raise Exception ("~/.gitmirrorrc non existant or missing [Github] section with user and password keys")
-        except configparser.NoOptionError:
+        except ConfigParser.NoOptionError:
             raise Exception ("~/.gitmirrorrc misses user or/and password keys in the [Github] section")
 
     def check_if_repo_exists (self, name):
@@ -105,8 +105,8 @@ def get_repo_settings (name):
     doap_url = "https://git.gnome.org/browse/%s/plain/%s.doap" % (name, name)
 
     rq = requests.get(doap_url)
-    if rq != 200:
-        raise Exception ("Could not get doap: %s", doap_url)
+    if rq.status_code != 200:
+        raise Exception ("Could not get doap: %s" % doap_url)        
 
     prj = et.fromstring (rq.text)
 
@@ -133,7 +133,7 @@ def get_repo_settings (name):
 def main ():
     gh = GitHub ()
     repo_name = get_repo_name ()
-    github_name = normalize_name (repo_name)
+    github_name = gh.normalize_name (repo_name)
     if not gh.check_if_repo_exists(repo_name):
         settings = get_repo_settings (repo_name)
     try:
@@ -154,10 +154,10 @@ if __name__ == "__main__":
     except Exception as e:
         msg = MIMEText(str(e))
         msg['Subject'] = "[GITHUB HOOK] ERROR trying to push %s" %  os.getcwd ()
-        msg['From']    = "gnome-sysadmin@gnome.org"
+        msg['From']    = "noreply@gnome.org"
         msg['To']      = "gnome-sysadmin@gnome.org"
         msg['X-GNOME-SERVICE'] = "github-mirror"
         server = smtplib.SMTP("localhost")
-        server.send_message (msg)
+        server.sendmail (msg['From'], msg['To'], msg.as_string())
         server.quit ()
         raise e
