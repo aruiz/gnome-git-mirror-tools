@@ -114,7 +114,7 @@ def get_repo_settings (name):
 
     name = prj.find ('{%s}name' % nss["doap"])
     desc = prj.find('{%s}shortdesc' % nss["doap"])
-    homepage = prj.find('{%s}homepage/[{%s}resource]', (nss["doap"], nss["rdf"]))
+    homepage = prj.find('{%s}homepage/[{%s}resource]' % (nss["doap"], nss["rdf"]))
 
     name = name.text if name != None else repo.split('/')[-1]
     desc = desc.text if desc != None else name
